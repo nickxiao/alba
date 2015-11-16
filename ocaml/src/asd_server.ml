@@ -525,8 +525,8 @@ let execute_update : type req res.
       begin
         Lwt_log.debug_f
           "Apply with asserts = %s & upds = %s"
-          ([%show: Assert.t list] asserts)
-          ([%show: Update.t list] upds)
+          ([%show: Apply1.Assert.t list] asserts)
+          ([%show: Apply1.Update.t list] upds)
         >>= fun () ->
         let () =
           if not (AsdMgmt.updates_allowed mgmt upds )
@@ -534,7 +534,7 @@ let execute_update : type req res.
         in
         let transform_asserts () =
           (* translate asserts that may take some time into 'immediate' asserts *)
-          let open Assert in
+          let open Apply1.Assert in
           let none_asserts, some_asserts =
             List.partition
               is_none_assert
@@ -604,7 +604,7 @@ let execute_update : type req res.
           let immediate_upds_promise =
             Lwt_list.map_p
               (function
-                | Update.Set (key, Some (v, c, _)) ->
+                | Apply1.Update.Set (key, Some (v, c, _)) ->
                    let blob_length = Slice.length v in
                    (if blob_length < blob_threshold
                     then begin
@@ -629,7 +629,7 @@ let execute_update : type req res.
                        Value.to_buffer
                        (c, value) in
                    Lwt.return (key, `Set (value, value'))
-                | Update.Set (key, None) ->
+                | Apply1.Update.Set (key, None) ->
                    Lwt.return(key, `Delete))
               upds
           in
@@ -809,6 +809,9 @@ let execute_update : type req res.
            in
            inner 0)
       end
+    | Apply2 ->
+       (* TODO *)
+       fun _ -> Lwt.return ()
     | SetFull -> fun full ->
       Lwt_log.warning_f "SetFull %b" full >>= fun () ->
       AsdMgmt.set_full mgmt full;

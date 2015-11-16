@@ -25,7 +25,7 @@ let pp_key = Slice.pp_limited_escaped
 
 module Value = struct
   type blob =
-    | Direct of Slice.t
+    | Direct of Slice.t         (* TODO show limited escaped variant... *)
     | Later of int
   [@@deriving show]
   type t = blob * Checksum.t
@@ -59,10 +59,6 @@ module Value = struct
     (blob, cs)
 end
 
-type value = Slice.t
-let show_value = Slice.show_limited_escaped
-let pp_value = Slice.pp_limited_escaped
-
 type checksum = Checksum.t [@@deriving show]
 
 let _MAGIC = "aLbA"
@@ -71,86 +67,180 @@ let _VERSION = 1l
 let incompatible version =
   version <> _VERSION
 
-module Assert = struct
-  type t =
-    | Value of key * value option
-                 [@@deriving show]
+module Apply1 = struct
 
-  let is_none_assert = function
-    | Value (_, None) -> true
-    | Value (_, Some _) -> false
+  type value = Slice.t
+  let show_value = Slice.show_limited_escaped
+  let pp_value = Slice.pp_limited_escaped
 
-  let key_of (Value (k,_)) = k
+  module Assert = struct
 
-  let value key value = Value (key, Some value)
-  let value_string key value' =
-    value
-      (Slice.wrap_string key)
-      (Slice.wrap_string value')
+    type t =
+      | Value of key * value option
+                             [@@deriving show]
 
-  let none key = Value (key, None)
-  let none_string key = none (Slice.wrap_string key)
+    let is_none_assert = function
+      | Value (_, None) -> true
+      | Value (_, Some _) -> false
 
-  let value_option key vo = Value (key, vo)
+    let key_of (Value (k,_)) = k
 
-  let to_buffer buf = function
-    | Value (key, value) ->
-      Llio.int8_to buf 1;
-      Slice.to_buffer buf key;
-      Llio.option_to Slice.to_buffer buf value
+    let value key value = Value (key, Some value)
+    let value_string key value' =
+      value
+        (Slice.wrap_string key)
+        (Slice.wrap_string value')
 
-  let from_buffer buf =
-    match Llio.int8_from buf with
-    | 1 ->
-      let key = Slice.from_buffer buf in
-      let value = Llio.option_from Slice.from_buffer buf in
-      Value (key, value)
-    | k -> Prelude.raise_bad_tag "Asd_protocol.Assert" k
+    let none key = Value (key, None)
+    let none_string key = none (Slice.wrap_string key)
+
+    let value_option key vo = Value (key, vo)
+
+    let to_buffer buf = function
+      | Value (key, value) ->
+         Llio.int8_to buf 1;
+         Slice.to_buffer buf key;
+         Llio.option_to Slice.to_buffer buf value
+
+    let from_buffer buf =
+      match Llio.int8_from buf with
+      | 1 ->
+         let key = Slice.from_buffer buf in
+         let value = Llio.option_from Slice.from_buffer buf in
+         Value (key, value)
+      | k -> Prelude.raise_bad_tag "Asd_protocol.Assert" k
+  end
+
+  module Update = struct
+
+    type t =
+      | Set of key * (value * checksum * bool) option
+                                               [@@ deriving show]
+
+    let set k v c b = Set (k, Some (v,c,b))
+
+    let set_string k v c b =
+      set (Slice.wrap_string k) (Slice.wrap_string v) c b
+
+    let delete k = Set (k, None)
+    let delete_string k = delete (Slice.wrap_string k)
+
+    let to_buffer buf = function
+      | Set (key, vcob) ->
+         Llio.int8_to buf 1;
+         Slice.to_buffer buf key;
+         Llio.option_to
+           (Llio.tuple3_to
+              Slice.to_buffer
+              Checksum.output
+              Llio.bool_to
+           )
+           buf
+           vcob
+
+    let from_buffer buf =
+      match Llio.int8_from buf with
+      | 1 ->
+         let key = Slice.from_buffer buf in
+         let vcob =
+           Llio.option_from
+             (Llio.tuple3_from
+                Slice.from_buffer
+                Checksum.input
+                Llio.bool_from
+             )
+             buf
+         in
+         Set (key, vcob)
+      | k -> Prelude.raise_bad_tag "Asd_protocol.Update" k
+
+  end
 end
 
-module Update = struct
+module Apply2 = struct
 
-  type t =
-    | Set of key * (value * checksum * bool) option
-                                             [@@ deriving show]
+  module V = Value
 
-  let set k v c b = Set (k, Some (v,c,b))
+  module Assert = struct
 
-  let set_string k v c b =
-    set (Slice.wrap_string k) (Slice.wrap_string v) c b
+    type t =
+      | Value of key * V.blob option
+                             [@@deriving show]
 
-  let delete k = Set (k, None)
-  let delete_string k = delete (Slice.wrap_string k)
+    let is_none_assert = function
+      | Value (_, None) -> true
+      | Value (_, Some _) -> false
 
-  let to_buffer buf = function
-    | Set (key, vcob) ->
-      Llio.int8_to buf 1;
-      Slice.to_buffer buf key;
-      Llio.option_to
-        (Llio.tuple3_to
-           Slice.to_buffer
-           Checksum.output
-           Llio.bool_to
-        )
-        buf
-        vcob
+    let key_of (Value (k,_)) = k
 
-  let from_buffer buf =
-    match Llio.int8_from buf with
-    | 1 ->
-      let key = Slice.from_buffer buf in
-      let vcob =
-        Llio.option_from
-          (Llio.tuple3_from
-             Slice.from_buffer
-             Checksum.input
-             Llio.bool_from
-          )
-          buf
-      in
-      Set (key, vcob)
-    | k -> Prelude.raise_bad_tag "Asd_protocol.Update" k
+    let value key value = Value (key, Some value)
+    let value_string key value' =
+      value
+        (Slice.wrap_string key)
+        (V.Direct (Slice.wrap_string value'))
 
+    let none key = Value (key, None)
+    let none_string key = none (Slice.wrap_string key)
+
+    let value_option key vo = Value (key, vo)
+
+    let to_buffer buf = function
+      | Value (key, value) ->
+         Llio.int8_to buf 1;
+         Slice.to_buffer buf key;
+         Llio.option_to V.blob_to_buffer buf value
+
+    let from_buffer buf =
+      match Llio.int8_from buf with
+      | 1 ->
+         let key = Slice.from_buffer buf in
+         let value = Llio.option_from V.blob_from_buffer buf in
+         Value (key, value)
+      | k -> Prelude.raise_bad_tag "Asd_protocol.Assert" k
+  end
+
+  module Update = struct
+
+    type t =
+      | Set of key * (V.t * bool) option
+                                  [@@ deriving show]
+
+    let set k v c b = Set (k, Some ((V.Direct (v),c),b))
+
+    let set_string k v c b =
+      set (Slice.wrap_string k) (Slice.wrap_string v) c b
+
+    let delete k = Set (k, None)
+    let delete_string k = delete (Slice.wrap_string k)
+
+    let to_buffer buf = function
+      | Set (key, vcob) ->
+         Llio.int8_to buf 1;
+         Slice.to_buffer buf key;
+         Llio.option_to
+           (Llio.pair_to
+              V.to_buffer
+              Llio.bool_to
+           )
+           buf
+           vcob
+
+    let from_buffer buf =
+      match Llio.int8_from buf with
+      | 1 ->
+         let key = Slice.from_buffer buf in
+         let vcob =
+           Llio.option_from
+             (Llio.pair_from
+                V.from_buffer
+                Llio.bool_from
+             )
+             buf
+         in
+         Set (key, vcob)
+      | k -> Prelude.raise_bad_tag "Asd_protocol.Update" k
+
+  end
 end
 
 module AsdMgmt = struct
@@ -163,7 +253,7 @@ module AsdMgmt = struct
 
     let make latest_disk_usage limit = { latest_disk_usage; limit; full=false }
 
-    let updates_allowed t (updates:Update.t list) =
+    let updates_allowed t (updates:Apply1.Update.t list) =
       let (used, cap) = !(t.latest_disk_usage) in
       Lwt_log.ign_debug_f "updates_allowed?(used:%Li,cap:%Li) full:%b"
                           used cap t.full;
@@ -171,8 +261,8 @@ module AsdMgmt = struct
         Lwt_log.ign_debug "check_this_update";
         let rec check = function
           | [] -> true
-          | Update.Set(_, None) :: updates -> check updates
-          | Update.Set(k, Some _) :: _ ->
+          | Apply1.Update.Set(_, None) :: updates -> check updates
+          | Apply1.Update.Set(k, Some _) :: _ ->
 
              let r =
                if Slice.compare k _next_msg_id = 0
@@ -316,8 +406,8 @@ module Protocol = struct
 
   type ('request, 'response) query =
     | Range : (range_request * priority, key counted_list_more) query
-    | MultiGet : (key list * priority, (value * Checksum.t) option list) query
-    | RangeEntries : (range_request * priority, (key * value * checksum) counted_list_more)
+    | MultiGet : (key list * priority, (Apply1.value * Checksum.t) option list) query
+    | RangeEntries : (range_request * priority, (key * Apply1.value * checksum) counted_list_more)
                        query
     | Statistics: (bool, AsdStatistics.t) query
     | GetVersion: (unit, (int * int * int *string)) query
@@ -327,7 +417,8 @@ module Protocol = struct
   [@deriving show]
 
   type ('request, 'response) update =
-    | Apply : (Assert.t list * Update.t list * priority, unit) update
+    | Apply : (Apply1.Assert.t list * Apply1.Update.t list * priority, unit) update
+    | Apply2 : (Apply2.Assert.t list * Apply2.Update.t list * priority, unit) update
     | SetFull: (bool, unit) update
 
   type t =
@@ -344,6 +435,7 @@ module Protocol = struct
                       Wrap_query MultiGet2,    8l, "MultiGet2";
                       Wrap_query MultiExists,  9l, "MultiExists";
                       Wrap_query GetDiskUsage, 10l, "GetDiskUsage";
+                      Wrap_update Apply2,      11l, "Apply2";
                     ]
 
   let wrap_unknown_operation f =
@@ -478,8 +570,12 @@ module Protocol = struct
   let update_request_serializer : type req res. (req, res) update -> req Llio.serializer
     = function
       | Apply -> fun buf (asserts, updates, prio) ->
-        Llio.list_to Assert.to_buffer buf asserts;
-        Llio.list_to Update.to_buffer buf updates;
+        Llio.list_to Apply1.Assert.to_buffer buf asserts;
+        Llio.list_to Apply1.Update.to_buffer buf updates;
+        priority_to_buffer buf prio
+      | Apply2 -> fun buf (asserts, updates, prio) ->
+        Llio.list_to Apply2.Assert.to_buffer buf asserts;
+        Llio.list_to Apply2.Update.to_buffer buf updates;
         priority_to_buffer buf prio
       | SetFull -> fun buf full ->
         Llio.bool_to buf full
@@ -488,9 +584,15 @@ module Protocol = struct
     = function
       | Apply -> fun buf ->
         Lwt_log.ign_debug "Apply deser";
-        let asserts = Llio.list_from Assert.from_buffer buf in
-        let updates = Llio.list_from Update.from_buffer buf in
+        let asserts = Llio.list_from Apply1.Assert.from_buffer buf in
+        let updates = Llio.list_from Apply1.Update.from_buffer buf in
         let prio    = maybe_priority_from_buffer buf in
+        (asserts, updates, prio)
+      | Apply2 -> fun buf ->
+        Lwt_log.ign_debug "Apply2 deser";
+        let asserts = Llio.list_from Apply2.Assert.from_buffer buf in
+        let updates = Llio.list_from Apply2.Update.from_buffer buf in
+        let prio    = priority_from_buffer buf in
         (asserts, updates, prio)
       | SetFull -> fun buf ->
         Lwt_log.ign_debug "SetFull deser";
@@ -499,10 +601,12 @@ module Protocol = struct
   let update_response_serializer : type req res. (req, res) update -> res Llio.serializer
     = function
       | Apply -> Llio.unit_to
+      | Apply2 -> Llio.unit_to
       | SetFull -> Llio.unit_to
 
   let update_response_deserializer : type req res. (req, res) update -> res Llio.deserializer
     = function
       | Apply -> Llio.unit_from
+      | Apply2 -> Llio.unit_from
       | SetFull -> Llio.unit_from
 end

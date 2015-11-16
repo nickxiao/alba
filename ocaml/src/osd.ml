@@ -17,15 +17,15 @@ limitations under the License.
 open Prelude
 
 type key = Asd_protocol.key
-type value = Asd_protocol.value
+type value = Asd_protocol.Apply1.value
 type checksum = Asd_protocol.checksum
 
 type priority = Asd_protocol.Protocol.priority =
               | High
               | Low
 
-module Update = Asd_protocol.Update
-module Assert = Asd_protocol.Assert
+module Update = Asd_protocol.Apply1.Update
+module Assert = Asd_protocol.Apply1.Assert
 
 module Osd_namespace_state = struct
   type t =

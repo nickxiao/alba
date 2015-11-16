@@ -186,23 +186,23 @@ class client fd ic id =
       Lwt.return
 
     method set ~prio key value assertable ?(cs = Checksum.Checksum.NoChecksum) () =
-      let u = Update.set key value cs assertable in
+      let u = Apply1.Update.set key value cs assertable in
       self # apply_sequence ~prio [] [u] >>= fun _ ->
       Lwt.return ()
 
     method set_string ~prio ?(cs = Checksum.Checksum.NoChecksum)
              key value assertable
       =
-      let u = Update.set_string key value cs assertable in
+      let u = Apply1.Update.set_string key value cs assertable in
       self # apply_sequence ~prio [] [u] >>= fun _ ->
       Lwt.return ()
 
     method delete ~prio key =
-      self # apply_sequence ~prio [] [ Update.delete key ] >>= fun _ ->
+      self # apply_sequence ~prio [] [ Apply1.Update.delete key ] >>= fun _ ->
       Lwt.return ()
 
     method delete_string ~prio key =
-      self # apply_sequence ~prio [] [ Update.delete_string key ] >>= fun _ ->
+      self # apply_sequence ~prio [] [ Apply1.Update.delete_string key ] >>= fun _ ->
       Lwt.return ()
 
     method range ~prio ~first ~finc ~last ~reverse ~max =
@@ -334,7 +334,7 @@ class asd_osd (asd_id : string) (asd : client) =
 
   method range_entries prio = asd # range_entries ~prio
 
-  method apply_sequence prio asserts (upds: Update.t list) =
+  method apply_sequence prio asserts (upds: Apply1.Update.t list) =
     Lwt.catch
       (fun () ->
          asd # apply_sequence ~prio asserts upds >>= fun () ->

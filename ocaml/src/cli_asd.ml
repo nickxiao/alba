@@ -156,7 +156,7 @@ let asd_set host port asd_id key value =
      Lwt_log.warning "checksum option will be `NoChecksum`"
      >>= fun ()->
      client # apply_sequence ~prio:Osd.High []
-             [ Update.set
+             [ Apply1.Update.set
                  (Slice.wrap_string key)
                  (Slice.wrap_string value)
                  checksum true

@@ -29,7 +29,7 @@ let deletes (client: Osd.osd) progress n value_size period prefix =
     let key = gen () in
     let open Slice in
     let key_slice = Slice.wrap_string key in
-    let delete = Update.Set (key_slice, None) in
+    let delete = Apply1.Update.Set (key_slice, None) in
     let updates = [delete] in
     client # apply_sequence Osd.High [] updates >>= maybe_fail
   in
@@ -75,8 +75,8 @@ let sets (client:Osd.osd) progress n value_size period prefix =
     let key_slice = Slice.wrap_string key in
     let value_slice = Slice.wrap_string value in
     let open Checksum in
-    let set = Update.Set (key_slice,
-                          Some (value_slice, Checksum.NoChecksum, false))
+    let set = Apply1.Update.Set (key_slice,
+                                Some (value_slice, Checksum.NoChecksum, false))
 
     in
     let updates = [set] in
