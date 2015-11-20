@@ -320,17 +320,35 @@ class osd_access
              | Available ->
                 Lwt.return ()
              | ThisAlba osd_id ->
-
-                get_osd_info ~osd_id >>= fun (osd_info, osd_state) ->
-                Osd_state.add_ips_port osd_state ips port;
-                (match extras with
-                 | None -> ()
-                 | Some { used; total; _; } ->
-                    Osd_state.add_disk_usage osd_state (used, total));
-                Osd_state.add_json osd_state json;
-                Osd_state.add_seen osd_state;
-
-                Lwt.return ()
+                begin
+                  get_osd_info ~osd_id >>= fun (osd_info, osd_state) ->
+                  Osd_state.add_ips_port osd_state ips port;
+                  Osd_state.add_json osd_state json;
+                  Osd_state.add_seen osd_state;
+                  let () =
+                    match extras with
+                    | None -> ()
+                    | Some { used; total; _; } ->
+                       let () = Osd_state.add_disk_usage osd_state (used, total) in
+                       let osd_info' = Osd.{ osd_info with total; used;} in
+                       let () =
+                         Hashtbl.replace
+                           osds_info_cache osd_id
+                           (osd_info', osd_state)
+                       in ()
+                  in
+                  let ips',port'  = Osd.get_ips_port osd_info.Osd.kind in
+                  let () =
+                    if ips' <> ips || port' <> port
+                    then
+                      begin
+                        Lwt_log.ign_info_f
+                          "Asd (%li) now has new ips/port -> invalidating connection pool" osd_id;
+                        Pool.Osd.invalidate osds_pool ~osd_id
+                      end
+                  in
+                  Lwt.return ()
+                end
            end
          else if check_claimed id
          then
