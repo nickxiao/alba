@@ -1213,25 +1213,32 @@ let test_disk_churn () =
          | (asd_name, asd_port) :: asds ->
            Asd_test.with_asd_client asd_name asd_port
              (fun asd ->
-                alba_client # osd_access # seen
-                  ~check_claimed:(fun id -> true)
-                  ~check_claimed_delay:1.
-                  Discovery.(Good("", { id = asd_name;
-                                        extras = Some({
-                                            node_id = "bla";
-                                            version = "AsdV1";
-                                            total = 1L;
-                                            used = 1L;
-                                          });
-                                        ips = ["127.0.0.1"];
-                                        port = Some asd_port;
-                                        tlsPort = None;
-                                      })) >>= fun () ->
-                alba_client # claim_osd ~long_id:asd_name >>= fun osd_id ->
-                with_asds
-                  f
-                  (osd_id :: acc)
-                  asds)
+              Lwt.finalize
+                (fun () ->
+                 alba_client # osd_access # seen
+                             ~check_claimed:(fun id -> true)
+                             ~check_claimed_delay:1.
+                             Discovery.(Good("", { id = asd_name;
+                                                   extras = Some({
+                                                                    node_id = "bla";
+                                                                    version = "AsdV1";
+                                                                    total = 1L;
+                                                                    used = 1L;
+                                                                  });
+                                                   ips = ["127.0.0.1"];
+                                                   port = Some asd_port;
+                                                   tlsPort = None;
+                                                 })) >>= fun () ->
+                 alba_client # claim_osd ~long_id:asd_name >>= fun osd_id ->
+                 with_asds
+                   f
+                   (osd_id :: acc)
+                   asds)
+                (fun () ->
+                 safe_decommission
+                   alba_client
+                   [ asd_name ]
+                ))
        in
 
        let asds = [
@@ -1442,15 +1449,7 @@ let test_disk_churn () =
        in
 
        with_asds
-         (fun x ->
-            Lwt.finalize
-              (fun () -> inner x)
-              (fun () ->
-                 (* deleting the namespace so that the osds can be fully decommissioned *)
-                 safe_delete_namespace alba_client namespace >>= fun () ->
-                 safe_decommission
-                   alba_client
-                   (List.map fst asds)))
+         inner
          []
          asds))
 
