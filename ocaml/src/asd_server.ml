@@ -918,8 +918,8 @@ let execute_update : type req res.
              | attempt ->
                 Lwt.catch
                   (fun () ->
-                   transform_asserts () >>= fun (none_asserts, some_asserts) ->
                    immediate_updates_promise >>= fun immediate_updates ->
+                   transform_asserts () >>= fun (none_asserts, some_asserts) ->
                    let files_to_be_deleted =
                      try_apply_immediate
                        none_asserts some_asserts
