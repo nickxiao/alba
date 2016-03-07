@@ -215,9 +215,10 @@ let build_initial_state info =
        let d_nodes =
          List.map
            (fun (osd_id, info) ->
-            let tf = Int64.to_float info.OsdInfo.total in
-            let uf = Int64.to_float info.OsdInfo.used in
-            let weight = tf /. (1.0 +. uf) in
+            (* let tf = Int64.to_float info.OsdInfo.total in *)
+            (* let uf = Int64.to_float info.OsdInfo.used in *)
+            (* let weight = tf /. (1.0 +. uf) in *)
+            let weight = 1. in
             D(weight, 0, osd_id))
            ds
        in
