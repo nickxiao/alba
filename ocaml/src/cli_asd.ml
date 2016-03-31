@@ -37,6 +37,7 @@ let asd_start cfg_url slow log_sinks =
            buffer_size, tls,       tcp_keepalive,
            write_blobs,
            use_fadvise, use_fallocate,
+           use_sendfile,
            rocksdb_block_cache_size
         =
         let open Config in
@@ -46,6 +47,7 @@ let asd_start cfg_url slow log_sinks =
         cfg.buffer_size, cfg.tls,   cfg.tcp_keepalive,
         cfg.__warranty_void__write_blobs,
         cfg.use_fadvise, cfg.use_fallocate,
+        cfg.use_sendfile,
         cfg.rocksdb_block_cache_size
       in
 
@@ -94,6 +96,7 @@ let asd_start cfg_url slow log_sinks =
                             ~write_blobs
                             ~use_fadvise
                             ~use_fallocate
+                            ~use_sendfile
   in
 
   lwt_server ~log_sinks ~subcomponent:"asd" t

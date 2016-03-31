@@ -363,48 +363,54 @@ module Net_fd = struct
     where it's needed nor used
     and pulls along cstruct and friends
    *)
-  let sendfile_all ~fd_in ~offset ~(fd_out:t) size =
+  let sendfile_all ~use_sendfile ~fd_in ~offset ~(fd_out:t) size =
+    let inner write fd_out =
+      Lwt_unix.lseek fd_in offset Lwt_unix.SEEK_SET >>= fun _ ->
+      let copy_using buffer =
+        let buffer_size = Lwt_bytes.length buffer in
+        let rec loop todo =
+          if todo = 0
+          then Lwt.return_unit
+          else
+            begin
+              let step =
+                if todo <= buffer_size
+                then todo
+                else buffer_size
+              in
+              Lwt_bytes.read fd_in buffer 0 step >>= fun bytes_read ->
+              Lwt_extra2._write_all
+                (write fd_out buffer)
+                0 bytes_read >>= fun () ->
+              loop (todo - bytes_read)
+            end
+        in
+        loop size
+      in
+      Lwt_bytes.with_bytes_lwt size copy_using
+    in
     match fd_out with
     | Plain fd ->
-       Fsutil.sendfile_all
-         ~wait_readable:false
-         ~wait_writeable:true
-         ~detached:true
-         ~fd_in ~offset
-         ~fd_out:fd
-         size
+       if use_sendfile
+       then
+         Fsutil.sendfile_all
+           ~wait_readable:false
+           ~wait_writeable:true
+           ~detached:true
+           ~fd_in ~offset
+           ~fd_out:fd
+           size
+       else
+         inner Lwt_bytes.write fd
     | SSL(_,socket) ->
-       Lwt_unix.lseek fd_in offset Lwt_unix.SEEK_SET >>= fun _ ->
-       let copy_using buffer =
-         let buffer_size = Lwt_bytes.length buffer in
-          let write_all socket buffer offset length =
-            let write_from_source = Lwt_ssl.write_bytes socket buffer in
-            Lwt_extra2._write_all write_from_source offset length
-          in
-          let rec loop todo =
-            if todo = 0
-            then Lwt.return_unit
-            else
-              begin
-                let step =
-                  if todo <= buffer_size
-                  then todo
-                  else buffer_size
-                in
-                Lwt_bytes.read fd_in        buffer 0 step >>= fun bytes_read ->
-                write_all socket buffer 0 bytes_read >>= fun () ->
-                loop (todo - bytes_read)
-              end
-          in
-          loop size
-       in
-       Buffer_pool.with_buffer Buffer_pool.default_buffer_pool copy_using
+       inner Lwt_ssl.write_bytes socket
 end
 
 let execute_query : type req res.
                          Rocks_key_value_store.t ->
                          (Llio2.WriteBuffer.t * (Net_fd.t ->
                                                  unit Lwt.t)) Asd_io_scheduler.t ->
+                         use_sendfile : bool ->
                          DirectoryInfo.t ->
                          AsdMgmt.t ->
                          AsdStatistics.t ->
@@ -412,7 +418,7 @@ let execute_query : type req res.
                          req ->
                          (Llio2.WriteBuffer.t * (Net_fd.t ->
                                                  unit Lwt.t)) Lwt.t
-  = fun kv io_sched dir_info mgmt stats q ->
+  = fun kv io_sched ~use_sendfile dir_info mgmt stats q ->
 
     let open Protocol in
     let module Llio = Llio2.WriteBuffer in
@@ -564,6 +570,7 @@ let execute_query : type req res.
                      then Posix.posix_fadvise blob_ufd 0 size Posix.POSIX_FADV_SEQUENTIAL
                    in
                    Net_fd.sendfile_all
+                     ~use_sendfile
                      ~fd_in:blob_fd ~offset:0
                      ~fd_out:nfd
                      size
@@ -637,6 +644,7 @@ let execute_query : type req res.
                            Lwt_list.iter_s
                              (fun (offset, length) ->
                               Net_fd.sendfile_all
+                                ~use_sendfile
                                 ~fd_in:blob_fd ~offset
                                 ~fd_out:nfd
                                 length
@@ -1063,7 +1071,7 @@ let asd_protocol
       kv ~release_fnr ~slow io_sched
       dir_info stats ~mgmt
       ~get_next_fnr asd_id
-      nfd
+      nfd ~use_sendfile
   =
   (* Lwt_log.debug "Waiting for request" >>= fun () -> *)
   let handle_request (buf : Llio2.ReadBuffer.t) code =
@@ -1099,7 +1107,7 @@ let asd_protocol
        begin match command with
              | Protocol.Wrap_query q ->
                 let req = Protocol.query_request_deserializer q buf in
-                execute_query kv io_sched dir_info mgmt stats q req
+                execute_query kv io_sched ~use_sendfile dir_info mgmt stats q req
              | Protocol.Wrap_update u ->
                 let req = Protocol.update_request_deserializer u buf in
                 execute_update
@@ -1257,6 +1265,7 @@ let run_server
       ~tcp_keepalive
       ~use_fadvise
       ~use_fallocate
+      ~use_sendfile
   =
 
   let fsync =
@@ -1506,7 +1515,7 @@ let run_server
   in
   let mgmt = AsdMgmt.make latest_disk_usage limit in
 
-  let protocol nfd =
+  let protocol =
     asd_protocol
       ?cancel
       kv
@@ -1517,7 +1526,8 @@ let run_server
       stats
       ~mgmt
       ~get_next_fnr
-      asd_id nfd
+      asd_id
+      ~use_sendfile
   in
   let maybe_add_plain_server threads =
     match port with

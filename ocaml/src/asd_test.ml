@@ -85,6 +85,7 @@ let with_asd_client ?(is_restart=false) ?write_blobs test_name port f =
            ~multicast:(Some 10.0)
            ~use_fadvise:true
            ~use_fallocate:true
+           ~use_sendfile:true
          >>= fun () ->
          Lwt.fail_with "Asd server stopped!");
         begin

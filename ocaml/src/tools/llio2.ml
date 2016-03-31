@@ -320,12 +320,11 @@ module NetFdReader = struct
     open Lwt.Infix
 
     let with_lwt_bytes fd len f =
-      let buf = Lwt_bytes.create len in
-      Lwt.finalize
-        (fun () -> Net_fd.read_all_lwt_bytes_exact fd buf 0 len >>= fun () ->
-                   f buf)
-        (fun () -> Lwt_bytes.unsafe_destroy buf;
-                   Lwt.return_unit)
+      Lwt_bytes.with_bytes_lwt
+        len
+        (fun buf ->
+         Net_fd.read_all_lwt_bytes_exact fd buf 0 len >>= fun () ->
+         f buf)
 
     let with_buffer_from fd len f =
       with_lwt_bytes

@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 *)
 
+open Prelude
+
 module Lwt_bytes = struct
   include Lwt_bytes
 
@@ -28,6 +30,19 @@ module Lwt_bytes = struct
     Format.pp_print_string formatter (show t)
 
   let unsafe_destroy (t : t) = Core_kernel.Bigstring.unsafe_destroy t
+
+  let with_bytes size f =
+    let b = create size in
+    finalize
+      (fun () -> f b)
+      (fun () -> unsafe_destroy b)
+
+  let with_bytes_lwt size f =
+    let b = create size in
+    Lwt.finalize
+      (fun () -> f b)
+      (fun () -> unsafe_destroy b;
+                 Lwt.return_unit)
 
   let create_random size =
     let r = Lwt_bytes.create size in
