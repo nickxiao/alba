@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 *)
 
+open Prelude
 open Lwt_bytes2
 open Lwt.Infix
 open Cmdliner
@@ -50,6 +51,7 @@ let bench_blobs path scenarios count value_size partial_read_size =
         write
         count
     in
+    let t_total = ref 0. in
     let partial_read_scenario progress =
       let target = Lwt_bytes.create partial_read_size in
       B.measured_loop
@@ -59,9 +61,14 @@ let bench_blobs path scenarios count value_size partial_read_size =
            dir_info
            (Int64.of_int fnr)
            (fun fd ->
-            let ufd = Lwt_unix.unix_file_descr fd in
-            Posix.posix_fadvise ufd 0 value_size Posix.POSIX_FADV_RANDOM;
-            Lwt_extra2.read_all_lwt_bytes_exact fd target 0 partial_read_size))
+            with_timing_lwt
+              (fun () ->
+               let ufd = Lwt_unix.unix_file_descr fd in
+               Posix.posix_fadvise ufd 0 value_size Posix.POSIX_FADV_RANDOM;
+               Lwt_extra2.read_all_lwt_bytes_exact fd target 0 partial_read_size)
+            >>= fun (t, ()) ->
+            t_total := !t_total +. t;
+            Lwt.return ()))
         count
     in
     Lwt_list.iter_s
@@ -72,7 +79,8 @@ let bench_blobs path scenarios count value_size partial_read_size =
         | `PartialReads -> partial_read_scenario)
          progress >>= fun r ->
        B.report (fst scenario) r)
-      scenarios
+      scenarios >>= fun () ->
+    Lwt_log.info_f "t_total = %f" !t_total
   in
   lwt_cmd_line ~to_json:false ~verbose:false t
 
