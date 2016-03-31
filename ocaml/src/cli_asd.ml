@@ -49,6 +49,10 @@ let asd_start cfg_url slow log_sinks =
         cfg.rocksdb_block_cache_size
       in
 
+      (if buffer_size <> None
+       then Lwt_log.warning "Specified obsolete config parameter 'buffer_size'"
+       else Lwt.return ()) >>= fun () ->
+
       (if not fsync
        then Lwt_log.warning "Fsync has been disabled, data will not be stored durably!!"
        else Lwt.return ()) >>= fun () ->
@@ -81,7 +85,7 @@ let asd_start cfg_url slow log_sinks =
             Lwt.ignore_result (Lwt_extra2.ignore_errors ~logging:true handle)) in
 
       Asd_server.run_server ips port home ~asd_id ~node_id ~slow
-                            ~fsync ~limit ~multicast ~buffer_size
+                            ~fsync ~limit ~multicast
                             ~tls
                             ~rocksdb_max_open_files:256
                             ~rocksdb_recycle_log_file_num:(Some 4)

@@ -1248,7 +1248,6 @@ let run_server
       (path:string)
       ~asd_id ~node_id
       ~fsync ~slow
-      ~buffer_size
       ~rocksdb_max_open_files
       ~rocksdb_recycle_log_file_num
       ~rocksdb_block_cache_size

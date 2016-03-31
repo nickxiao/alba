@@ -30,7 +30,7 @@ module Config = struct
     asd_id : (string option    [@default None]);
     __sync_dont_use : (bool    [@default true]);
     limit : (int64             [@default 99L]);
-    buffer_size : (int         [@default (768*1024)]);
+    buffer_size : (int option  [@default None]);
     multicast: (float option   [@default (Some 10.0)]);
     tls : (tls option          [@default None]);
     tcp_keepalive : (Tcp_keepalive2.t [@default Tcp_keepalive2.default]);
