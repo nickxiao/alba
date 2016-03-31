@@ -119,18 +119,16 @@ let asd_start_cmd =
   in
   asd_start_t, info
 
-let buffer_pool = Buffer_pool.osd_buffer_pool
-
 let run_with_asd_client' ~conn_info asd_id verbose f =
   lwt_cmd_line
     ~to_json:false ~verbose
     (fun () ->
      Asd_client.with_client
-       buffer_pool
        ~conn_info asd_id
        f)
 
 let with_osd_client (conn_info:Networking2.conn_info) osd_id f =
+  let buffer_pool = Buffer_pool.osd_buffer_pool in
   Discovery.get_kind buffer_pool conn_info >>= function
   | None -> failwith "what kind is this?"
   | Some k ->
@@ -426,7 +424,7 @@ let asd_multistatistics long_ids to_json verbose cfg_file tls_config clear =
                   (fun () ->
                     let conn_info = Asd_client.conn_info_from conn_info ~tls_config in
                     Asd_client.with_client
-                      buffer_pool ~conn_info (Some long_id)
+                      ~conn_info (Some long_id)
                       (fun client -> client # statistics clear)
                     >>= fun r ->
                     (long_id, Prelude.Error.Ok r) |> Lwt.return
@@ -505,7 +503,7 @@ let asd_statistics hosts port_o asd_id to_json verbose config_o tls_config clear
                     Asd_client.conn_info_from conn_info' ~tls_config
                   in
                   Asd_client.with_client
-                    buffer_pool ~conn_info asd_id
+                    ~conn_info asd_id
                     _inner
               end
            )

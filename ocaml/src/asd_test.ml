@@ -20,15 +20,12 @@ open Lwt.Infix
 open Slice
 open Lwt_bytes2
 
-let buffer_pool = Buffer_pool.osd_buffer_pool
-
 let rec wait_asd_connection port asd_id () =
   Lwt.catch
     (fun () ->
      let tls_config = Albamgr_test.get_tls_config () in
      let conn_info = Networking2.make_conn_info [ "127.0.0.1" ] port tls_config in
      Asd_client.with_client
-       buffer_pool
        ~conn_info  asd_id
        (fun client -> Lwt.return `Continue))
     (function
@@ -96,7 +93,6 @@ let with_asd_client ?(is_restart=false) ?write_blobs test_name port f =
             (wait_asd_connection port asd_id)>>= fun () ->
           let conn_info = Networking2.make_conn_info [ "127.0.0.1" ] port tls_config in
           Asd_client.with_client
-            buffer_pool
             ~conn_info (Some test_name)
             f >>= fun r ->
           Lwt_condition.broadcast cancel ();
