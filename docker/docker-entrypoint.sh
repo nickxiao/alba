@@ -11,10 +11,15 @@ set -x
 # the UID of jenkins in the container should match our UID on the host
 if [ ${UID} -ne 1001 ]
 then
+    cat /etc/passwd
     sed -i "s/x:1001:/x:${UID}:/" /etc/passwd
-    chown ${UID} /home/jenkins 
+
+    echo 'eval `opam config env --root=/home/jenkins/OPAM`' >> /home/jenkins/.profile
+    chown ${UID} /home/jenkins
+
     [ -d /home/jenkins/.ssh ] && chown ${UID} /home/jenkins/.ssh
 fi
 
+
 # finally execute the command the user requested
-exec "$@"
+exec sudo -i -u jenkins "$@"
