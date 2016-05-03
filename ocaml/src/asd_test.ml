@@ -68,8 +68,8 @@ let with_asd_client ?(is_restart=false) ?write_blobs test_name port f =
   then
     begin
       capacity := 10_000_000L;
-      Unix.system (Printf.sprintf "rm -rf %s" path) |> ignore;
-      Unix.mkdir path 0o777
+      Sys.command (Printf.sprintf "rm -rf %s" path) |> ignore;
+      Sys.command (Printf.sprintf "mkdir -p %s" path) |> ignore
     end;
   let asd_id = Some test_name in
   let cancel = Lwt_condition.create () in

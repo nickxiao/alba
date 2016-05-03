@@ -74,9 +74,3 @@ sudo aa-complain /etc/apparmor.d/docker
 #+END_SRC
 
 reference: [[http://unix.stackexchange.com/questions/136690/how-can-i-substitute-lsof-inside-a-docker-native-not-lxc-based][lsof-inside-docker]]
-
-
-sudo docker build --rm=true --tag=alba_ubuntu_16_04 ./docker/alba_ubuntu_16_04/
-
-sudo docker run -i -t -e UID=${UID} -v ${PWD}:/home/jenkins/alba -w /home/jenkins/alba alba_ubuntu_16_04 bash -l
-sudo docker run -i -t -e UID=${UID} -v ${PWD}:/home/jenkins/alba -w /home/jenkins/alba alba_ubuntu_16_04 make
